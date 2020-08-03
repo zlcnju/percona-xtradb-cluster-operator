@@ -262,6 +262,7 @@ pipeline {
                         runTest('auto-tuning', 'basic')
                         runTest('proxysql-sidecar-res-limits', 'basic')
                         runTest('users', 'basic')
+                        runTest('smart-update', 'basic')
                         ShutdownCluster('basic')
                    }
                 }

@@ -10,6 +10,7 @@ IMAGE=${IMAGE:-"perconalab/percona-xtradb-cluster-operator:${GIT_BRANCH}"}
 IMAGE_PXC=${IMAGE_PXC:-"perconalab/percona-xtradb-cluster-operator:master-pxc8.0"}
 IMAGE_PMM=${IMAGE_PMM:-"perconalab/percona-xtradb-cluster-operator:master-pmm"}
 IMAGE_PROXY=${IMAGE_PROXY:-"perconalab/percona-xtradb-cluster-operator:master-proxysql"}
+IMAGE_HAPROXY=${IMAGE_HAPROXY:-"perconalab/percona-xtradb-cluster-operator:master-haproxy"}
 IMAGE_BACKUP=${IMAGE_BACKUP:-"perconalab/percona-xtradb-cluster-operator:master-pxc8.0-backup"}
 tmp_dir=$(mktemp -d)
 sed=$(which gsed || which sed)
@@ -31,16 +32,17 @@ fi
 wait_cluster_consistency() {
     cluster_name=$1
     cluster_size=$2
-    proxy_sql_size=${3}
+    proxy_size=${3}
+    proxy_type=${4:-proxysql}
 
-    if [ -z "$proxy_sql_size" ]; then
-      proxy_sql_size=$cluster_size
+    if [ -z "${proxy_size}" ]; then
+      proxy_size=${cluster_size}
     fi
 
     sleep 7 # wait for two reconcile loops ;)  3 sec x 2 times + 1 sec = 7 seconds
     until [[ "$(kubectl_bin get pxc "${cluster_name}" -o jsonpath='{.status.state}')" == "ready" \
              && "$(kubectl_bin get pxc "${cluster_name}" -o jsonpath='{.status.pxc.ready}')" == "${cluster_size}" \
-             && "$(kubectl_bin get pxc "${cluster_name}" -o jsonpath='{.status.proxysql.ready}')" == "${proxy_sql_size}"  ]]; do
+             && "$(kubectl_bin get pxc "${cluster_name}" -o jsonpath='{.status.'${proxy_type}'.ready}')" == "${proxy_size}" ]]; do
         echo 'waiting for cluster readyness'
         sleep 20
     done
@@ -509,7 +511,8 @@ cat_config() {
         | $sed -e "s#image:.*-pmm\$#image: $IMAGE_PMM#" \
         | $sed -e "s#image:.*-backup\$#image: $IMAGE_BACKUP#" \
         | $sed -e "s#image:.*-proxysql\$#image: $IMAGE_PROXY#" \
-        | $sed -e "s#apply:.*#apply: Never#"
+        | $sed -e "s#apply:.*#apply: Never#" \
+        | $sed -e "s#image:.*-haproxy\$#image: $IMAGE_HAPROXY#"
 }
 
 apply_config() {
@@ -522,6 +525,7 @@ spinup_pxc() {
     local config=$2
     local size="${3:-3}"
     local sleep="${4:-10}"
+    local proxy_type="${5:-proxysql}"
 
     desc 'create first PXC cluster'
     kubectl_bin apply \
@@ -531,7 +535,7 @@ spinup_pxc() {
     apply_config "$config"
 
     desc 'check if all 3 Pods started'
-    wait_for_running "$cluster-proxysql" 1
+    wait_for_running "$cluster-${proxy_type}" 1
     wait_for_running "$cluster-pxc" "$size"
     sleep $sleep
 
@@ -541,10 +545,10 @@ spinup_pxc() {
     fi
     run_mysql \
         "CREATE DATABASE IF NOT EXISTS myApp; use myApp; CREATE TABLE IF NOT EXISTS myApp (id int PRIMARY KEY) $encrypt;" \
-        "-h $cluster-proxysql -uroot -proot_password"
+        "-h $cluster-${proxy_type} -uroot -proot_password"
     run_mysql \
         'INSERT myApp.myApp (id) VALUES (100500)' \
-        "-h $cluster-proxysql -uroot -proot_password"
+        "-h $cluster-${proxy_type} -uroot -proot_password"
     sleep 10
     for i in $(seq 0 $(($size - 1))); do
         compare_mysql_cmd "select-1" "SELECT * from myApp.myApp;" "-h $cluster-pxc-$i.$cluster-pxc -uroot -proot_password"
