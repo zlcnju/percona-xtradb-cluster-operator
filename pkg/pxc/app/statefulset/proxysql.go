@@ -49,9 +49,6 @@ func NewProxy(cr *api.PerconaXtraDBCluster) *Proxy {
 }
 
 func (c *Proxy) AppContainer(spec *api.PodSpec, secrets string, cr *api.PerconaXtraDBCluster) (corev1.Container, error) {
-	if cr.CompareVersionWith("1.6.0") >= 0 {
-		secrets = "internal-" + cr.Name
-	}
 	appc := corev1.Container{
 		Name:            proxyName,
 		Image:           spec.Image,
@@ -139,9 +136,6 @@ func (c *Proxy) SidecarContainers(spec *api.PodSpec, secrets string, cr *api.Per
 	res, err := app.CreateResources(spec.SidecarResources)
 	if err != nil {
 		return nil, fmt.Errorf("create sidecar resources error: %v", err)
-	}
-	if cr.CompareVersionWith("1.6.0") >= 0 {
-		secrets = "internal-" + cr.Name
 	}
 	pxcMonit := corev1.Container{
 		Name:            "pxc-monit",
@@ -239,9 +233,6 @@ func (c *Proxy) SidecarContainers(spec *api.PodSpec, secrets string, cr *api.Per
 
 func (c *Proxy) PMMContainer(spec *api.PMMSpec, secrets string, cr *api.PerconaXtraDBCluster) (*corev1.Container, error) {
 	ct := app.PMMClient(spec, secrets, cr.CompareVersionWith("1.2.0") >= 0)
-	if cr.CompareVersionWith("1.6.0") >= 0 {
-		secrets = "internal-" + cr.Name
-	}
 
 	pmmEnvs := []corev1.EnvVar{
 		{
