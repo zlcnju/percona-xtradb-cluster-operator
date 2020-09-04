@@ -132,6 +132,10 @@ func (c *Node) AppContainer(spec *api.PodSpec, secrets string, cr *api.PerconaXt
 				},
 			},
 			{
+				Name: "MONITOR_HOST",
+				Value: "%",
+			},
+			{
 				Name: "MONITOR_PASSWORD",
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: app.SecretKeySelector(secrets, "monitor"),
